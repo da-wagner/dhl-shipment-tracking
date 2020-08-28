@@ -28,6 +28,11 @@ class ShipmentTracking
     const OPERATION_STATUS_PUBLIC = 'get-status-for-public-user';
 
     /**
+     * maximum of pieces queried at the same time
+     */
+    const MAX_PIECE_CNT = 20;
+
+    /**
      * @var Credentials
      */
     protected $credentials;
@@ -51,6 +56,15 @@ class ShipmentTracking
         $data = $this->call(static::OPERATION_GET_PIECE, $pieceNumber, $language);
         $array = $this->getArray($data);
 
+        if ( self::isMultiPiece( $pieceNumber ) ) {
+            $pieces = [];
+            foreach ($array['data'] as $piece) {
+                $pieces[] = $piece['@attributes'];
+            }
+
+            return $pieces;
+        }
+
         return $array['data']['@attributes'];
     }
 
@@ -64,6 +78,20 @@ class ShipmentTracking
     {
         $data = $this->call(static::OPERATION_GET_PIECE_DETAIL, $pieceNumber, $language);
         $array = $this->getArray($data);
+
+        if ( self::isMultiPiece( $pieceNumber ) ) {
+            $pieces = [];
+            foreach ($array['data'] as $piece) {
+                $events = @$piece['data']['data'];
+                $pieces[] = [
+                    'details' => $piece['@attributes'],
+                    'events' => ! empty( $events ) ? $this->getEvents( $events ) : [],
+                ];
+            }
+
+            return $pieces;
+        }
+
         $events = @$array['data']['data']['data'];
 
         return ['details' => $array['data']['@attributes'], 'events' => !empty($events) ? $this->getEvents($events) : []];
@@ -80,6 +108,15 @@ class ShipmentTracking
         $data = $this->call(static::OPERATION_SIGNATURE, $pieceNumber, $language);
         $array = $this->getArray($data);
 
+        if ( self::isMultiPiece( $pieceNumber ) ) {
+            $pieces = [];
+            foreach ($array['data'] as $piece) {
+                $pieces[] = $piece['@attributes'];
+            }
+
+            return $pieces;
+        }
+
         return $array['data']['@attributes'];
     }
 
@@ -93,9 +130,33 @@ class ShipmentTracking
     {
         $data = $this->callPublic(static::OPERATION_STATUS_PUBLIC, $pieceNumber, $language);
         $array = $this->getArray($data);
+
+        if ( self::isMultiPiece( $pieceNumber ) ) {
+            $pieces = [];
+            foreach ($array['data'] as $piece) {
+                $events = @$piece['data']['data'];
+                $pieces[] = [
+                    'details' => $piece['@attributes'],
+                    'events' => ! empty( $events ) ? $this->getEvents( $events ) : [],
+                ];
+            }
+
+            return $pieces;
+        }
+
         $events = @$array['data']['data']['data'];
 
         return ['details' => $array['data']['data']['@attributes'], 'events' => !empty($events) ? $this->getEvents($events) : []];
+    }
+
+    /**
+     * @param string $pieceNumber
+     *
+     * @return bool
+     */
+    private static function isMultiPiece(string $pieceNumber)
+    {
+        return ( stripos( $pieceNumber, ';' ) !== false ) && ( count( explode( ';', $pieceNumber ) ) <= self::MAX_PIECE_CNT );
     }
 
     /**
